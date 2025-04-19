@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ESP32 WebSocket Control</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #deviceList { margin-bottom: 20px; }
+    .device { padding: 10px; border: 1px solid #ccc; margin: 5px; display: inline-block; }
+  </style>
+</head>
+<body>
+  <h1>ESP32 Control</h1>
+  <h2>Connected Devices</h2>
+  <div id="deviceList"></div>
+  <h2>Messages</h2>
+  <p><span id="messages"></span></p>
+  <input type="text" id="commandInput" placeholder="Enter command">
+  <select id="deviceSelect"></select>
+  <button onclick="sendCommand()">Send Command</button>
+
+  <script>
+    const ws = new WebSocket('wss://<your-render-app>.onrender.com'); // Render URL
+    const deviceList = document.getElementById('deviceList');
+    const messages = document.getElementById('messages');
+    const deviceSelect = document.getElementById('deviceSelect');
+    const commandInput = document.getElementById('commandInput');
+
+    ws.onopen = () => {
+      console.log('Connected to server');
+      messages.textContent = 'Connected!';
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'deviceList') {
+        // Update device list
+        deviceList.innerHTML = data.devices.map(id => `<div class="device">${id}</div>`).join('');
+        // Update dropdown
+        deviceSelect.innerHTML = '<option value="">Select Device</option>' + 
+          data.devices.map(id => `<option value="${id}">${id}</option>`).join('');
+      } else if (data.type === 'data') {
+        messages.textContent = `From ${data.deviceID}: ${data.payload}`;
+      }
+    };
+
+    ws.onclose = () => {
+      messages.textContent = 'Disconnected!';
+    };
+
+    function sendCommand() {
+      const deviceID = deviceSelect.value;
+      const payload = commandInput.value;
+      if (deviceID && payload) {
+        ws.send(JSON.stringify({ type: 'command', deviceID, payload }));
+        commandInput.value = '';
+      } else {
+        alert('Please select a device and enter a command');
+      }
+    }
+  </script>
+</body>
+</html>
