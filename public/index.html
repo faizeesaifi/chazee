@@ -24,7 +24,7 @@
   <div id="logContainer"></div>
 
   <script>
-    const ws = new WebSocket('ws://chazee.onrender.com:10000'); // Replace with your server's IP
+    const ws = new WebSocket('wss://chazee.onrender.com:10000/5qyz7i'); // Updated to wss
     const logContainer = document.getElementById('logContainer');
 
     ws.onopen = () => {
@@ -33,14 +33,20 @@
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      if (data.type === 'deviceStatus') {
+      if (data.type === 'deviceList') {
         data.devices.forEach(device => {
           const logEntry = document.createElement('div');
           logEntry.className = 'logEntry';
-          logEntry.textContent = `${new Date().toLocaleTimeString()}: Device ${device.deviceID} - Status: ${device.status}, Last Data: ${device.lastData || 'N/A'}`;
+          logEntry.textContent = `${new Date().toLocaleTimeString()}: Device ${device} connected`;
           logContainer.appendChild(logEntry);
           logContainer.scrollTop = logContainer.scrollHeight;
         });
+      } else if (data.type === 'data') {
+        const logEntry = document.createElement('div');
+        logEntry.className = 'logEntry';
+        logEntry.textContent = `${new Date().toLocaleTimeString()}: Device ${data.deviceID} - ${data.payload}`;
+        logContainer.appendChild(logEntry);
+        logContainer.scrollTop = logContainer.scrollHeight;
       }
     };
 
