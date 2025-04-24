@@ -9,12 +9,12 @@ const devices = new Map();
 
 wss.on('connection', (ws) => {
   let deviceID = null;
-  console.log('New client connected on port 10000');
+  console.log('New client connected');
   ws.on('message', (message) => {
     try {
       console.log('Raw message received:', message.toString());
       const data = JSON.parse(message.toString());
-      console.log('Parsed message on port 10000:', data);
+      console.log('Parsed message:', data);
       if (data.deviceID && !deviceID) {
         deviceID = data.deviceID;
         devices.set(deviceID, ws);
