@@ -1,22 +1,17 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('ws');
-
 const app = express();
 const server = http.createServer(app);
-const wss = new Server({ server, path: '/5qyz7i' }); // Explicitly set path
-
+const wss = new Server({ server, path: '/5qyz7i' });
 app.use(express.static('public'));
-
 const devices = new Map();
-
 wss.on('connection', (ws) => {
   let deviceID = null;
   console.log('New client connected');
-
   ws.on('message', (message) => {
     try {
-      const data = JSON.parse(message.toString()); // Ensure message is string
+      const data = JSON.parse(message.toString());
       if (data.deviceID && !deviceID) {
         deviceID = data.deviceID;
         devices.set(deviceID, ws);
@@ -31,7 +26,6 @@ wss.on('connection', (ws) => {
       console.log(`Error parsing message: ${err}`);
     }
   });
-
   ws.on('close', () => {
     if (deviceID) {
       devices.delete(deviceID);
@@ -40,7 +34,6 @@ wss.on('connection', (ws) => {
     }
   });
 });
-
 function broadcastDeviceList() {
   const deviceList = Array.from(devices.keys());
   const message = JSON.stringify({ type: 'deviceList', devices: deviceList });
@@ -50,7 +43,6 @@ function broadcastDeviceList() {
     }
   });
 }
-
 function broadcastData(deviceID, payload) {
   const message = JSON.stringify({ type: 'data', deviceID, payload });
   wss.clients.forEach(client => {
@@ -59,8 +51,7 @@ function broadcastData(deviceID, payload) {
     }
   });
 }
-
-const PORT = process.env.PORT || 10000; // Match Render port
+const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
