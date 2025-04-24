@@ -1,57 +1,163 @@
-const express = require('express');
-const http = require('http');
-const { Server } = require('ws');
-const app = express();
-const server = http.createServer(app);
-const wss = new Server({ server, path: '/5qyz7i' });
-app.use(express.static('public'));
-const devices = new Map();
-wss.on('connection', (ws) => {
-  let deviceID = null;
-  console.log('New client connected');
-  ws.on('message', (message) => {
-    try {
-      const data = JSON.parse(message.toString());
-      if (data.deviceID && !deviceID) {
-        deviceID = data.deviceID;
-        devices.set(deviceID, ws);
-        console.log(`Device connected: ${deviceID}`);
-        broadcastDeviceList();
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 Control Panel</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    #logContainer {
+      height: 400px;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      padding: 10px;
+      background-color: #f9f9f9;
+      margin-top: 10px;
+    }
+    .logEntry {
+      margin: 5px 0;
+      padding: 5px;
+      border-bottom: 1px solid #ddd;
+      word-wrap: break-word;
+    }
+    #connectionStatus {
+      margin: 10px 0;
+      font-weight: bold;
+    }
+    #commandInput {
+      width: 70%;
+      padding: 8px;
+      margin-right: 10px;
+      border: 1px solid #ccc;
+    }
+    #sendButton {
+      padding: 8px 15px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    #sendButton:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <h1>ESP32 Control Panel</h1>
+  <div id="connectionStatus">Connecting...</div>
+  <div>
+    <input id="commandInput" type="text" placeholder='Enter command (e.g., {"type":"data","deviceID":"ESP32_001","payload":"toggle_led"})'>
+    <button id="sendButton" disabled>Send Command</button>
+  </div>
+  <h2>Logs</h2>
+  <div id="logContainer"></div>
+
+  <script>
+    const wsUrl = 'wss://chazee.onrender.com:10000/5qyz7i';
+    const logContainer = document.getElementById('logContainer');
+    const connectionStatus = document.getElementById('connectionStatus');
+    const commandInput = document.getElementById('commandInput');
+    const sendButton = document.getElementById('sendButton');
+    let ws;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    const reconnectInterval = 5000;
+
+    function connectWebSocket() {
+      console.log('Attempting to connect to:', wsUrl);
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        connectionStatus.textContent = 'Connected';
+        connectionStatus.style.color = 'green';
+        sendButton.disabled = false;
+        reconnectAttempts = 0;
+        logMessage('Connected to server');
+      };
+
+      ws.onmessage = (event) => {
+        console.log('Raw message received:', event.data);
+        try {
+          const data = JSON.parse(event.data);
+          console.log('Parsed message:', data);
+          if (data.type === 'deviceList') {
+            data.devices.forEach(device => {
+              logMessage(`Device ${device} connected`);
+            });
+          } else if (data.type === 'data') {
+            logMessage(`Device ${data.deviceID} - ${data.payload}`);
+          } else {
+            logMessage(`Unknown message type: ${data.type}`);
+          }
+        } catch (err) {
+          console.error('JSON parse error:', err);
+          logMessage(`Error parsing message: ${err.message}`);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        logMessage('WebSocket error occurred');
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected');
+        connectionStatus.textContent = 'Disconnected';
+        connectionStatus.style.color = 'red';
+        sendButton.disabled = true;
+        logMessage('Disconnected from server');
+        if (reconnectAttempts < maxReconnectAttempts) {
+          reconnectAttempts++;
+          console.log(`Reconnect attempt ${reconnectAttempts}/${maxReconnectAttempts} in ${reconnectInterval/1000}s`);
+          setTimeout(connectWebSocket, reconnectInterval);
+        } else {
+          connectionStatus.textContent = 'Max reconnect attempts reached';
+          logMessage('Max reconnect attempts reached');
+        }
+      };
+    }
+
+    function logMessage(message) {
+      const logEntry = document.createElement('div');
+      logEntry.className = 'logEntry';
+      logEntry.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+      logContainer.appendChild(logEntry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+      console.log('UI Log:', message); // Also log to console
+    }
+
+    sendButton.addEventListener('click', () => {
+      const command = commandInput.value.trim();
+      if (command && ws && ws.readyState === WebSocket.OPEN) {
+        try {
+          const parsedCommand = JSON.parse(command);
+          ws.send(JSON.stringify(parsedCommand));
+          logMessage(`Sent command: ${command}`);
+          console.log('Sent command:', parsedCommand);
+          commandInput.value = '';
+        } catch (err) {
+          logMessage(`Invalid command JSON: ${err.message}`);
+          console.error('Command JSON error:', err);
+        }
+      } else {
+        logMessage('Cannot send: Invalid command or not connected');
+        console.log('Send failed: Invalid command or not connected');
       }
-      if (data.type === 'data') {
-        console.log(`Data from ${deviceID}: ${data.payload}`);
-        broadcastData(deviceID, data.payload);
+    });
+
+    commandInput.addEventListener('keypress', (event) => {
+      if (event.key === 'Enter') {
+        sendButton.click();
       }
-    } catch (err) {
-      console.log(`Error parsing message: ${err}`);
-    }
-  });
-  ws.on('close', () => {
-    if (deviceID) {
-      devices.delete(deviceID);
-      console.log(`Device disconnected: ${deviceID}`);
-      broadcastDeviceList();
-    }
-  });
-});
-function broadcastDeviceList() {
-  const deviceList = Array.from(devices.keys());
-  const message = JSON.stringify({ type: 'deviceList', devices: deviceList });
-  wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(message);
-    }
-  });
-}
-function broadcastData(deviceID, payload) {
-  const message = JSON.stringify({ type: 'data', deviceID, payload });
-  wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(message);
-    }
-  });
-}
-const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+    });
+
+    // Initial connection
+    connectWebSocket();
+  </script>
+</body>
+</html>
