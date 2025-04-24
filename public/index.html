@@ -25,7 +25,7 @@
   <div id="logContainer"></div>
 
   <script>
-    const wsUrl = 'wss://chazee.onrender.com:10000/5qyz7i'; // Machine ID: 5qyz7i
+    const wsUrl = 'wss://chazee.onrender.com/5qyz7i'; // Removed port 10000, using default 443
     const logContainer = document.getElementById('logContainer');
     const connectionStatus = document.getElementById('connectionStatus');
     const commandInput = document.getElementById('commandInput');
@@ -68,7 +68,7 @@
 
       ws.onerror = (error) => {
         console.error('[WebSocket] Error:', error);
-        logMessage('WebSocket error occurred');
+        logMessage(`WebSocket error: ${error.message || 'Unknown error'}`);
       };
 
       ws.onclose = (event) => {
@@ -76,7 +76,7 @@
         connectionStatus.textContent = 'Disconnected';
         connectionStatus.style.color = 'red';
         sendButton.disabled = true;
-        logMessage('Disconnected from server');
+        logMessage(`Disconnected from server (Code: ${event.code}, Reason: ${event.reason || 'None'})`);
         if (reconnectAttempts < maxReconnectAttempts) {
           reconnectAttempts++;
           console.log(`[WebSocket] Reconnect attempt ${reconnectAttempts}/${maxReconnectAttempts} in ${reconnectInterval/1000}s`);
