@@ -3,15 +3,18 @@ const http = require('http');
 const { Server } = require('ws');
 const app = express();
 const server = http.createServer(app);
-const wss = new Server({ server, path: '/5qyz7i' });
+const wss = new Server({ server, path: '/5qyz7i' }); // Machine ID: 5qyz7i
 app.use(express.static('public'));
 const devices = new Map();
+
 wss.on('connection', (ws) => {
   let deviceID = null;
-  console.log('New client connected');
+  console.log('New client connected on port 10000');
   ws.on('message', (message) => {
     try {
+      console.log('Raw message received:', message.toString());
       const data = JSON.parse(message.toString());
+      console.log('Parsed message on port 10000:', data);
       if (data.deviceID && !deviceID) {
         deviceID = data.deviceID;
         devices.set(deviceID, ws);
@@ -19,11 +22,11 @@ wss.on('connection', (ws) => {
         broadcastDeviceList();
       }
       if (data.type === 'data') {
-        console.log(`Data from ${deviceID}: ${data.payload}`);
-        broadcastData(deviceID, data.payload);
+        console.log(`Data from ${deviceID || 'unknown'}: ${data.payload}`);
+        broadcastData(data.deviceID, data.payload);
       }
     } catch (err) {
-      console.log(`Error parsing message: ${err}`);
+      console.log(`Error parsing message: ${err.message}`);
     }
   });
   ws.on('close', () => {
@@ -34,23 +37,28 @@ wss.on('connection', (ws) => {
     }
   });
 });
+
 function broadcastDeviceList() {
   const deviceList = Array.from(devices.keys());
   const message = JSON.stringify({ type: 'deviceList', devices: deviceList });
+  console.log('Broadcasting device list:', message);
   wss.clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(message);
     }
   });
 }
+
 function broadcastData(deviceID, payload) {
   const message = JSON.stringify({ type: 'data', deviceID, payload });
+  console.log('Broadcasting data:', message);
   wss.clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(message);
     }
   });
 }
+
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
