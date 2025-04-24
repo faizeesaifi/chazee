@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 Control Panel</title>
+  <style>
+    #logContainer {
+      height: 400px;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      padding: 10px;
+      background-color: #f9f9f9;
+    }
+    .logEntry {
+      margin: 5px 0;
+      padding: 5px;
+      border-bottom: 1px solid #ddd;
+    }
+    #connectionStatus {
+      margin: 10px 0;
+      font-weight: bold;
+    }
+    #commandInput {
+      width: 80%;
+      padding: 5px;
+      margin-right: 10px;
+    }
+    #sendButton {
+      padding: 5px 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>ESP32 Control Panel</h1>
+  <div id="connectionStatus">Connecting...</div>
+  <div>
+    <input id="commandInput" type="text" placeholder='Enter command (e.g., {"type":"data","deviceID":"ESP32_001","payload":"toggle_led"})'>
+    <button id="sendButton" disabled>Send Command</button>
+  </div>
+  <h2>Logs</h2>
+  <div id="logContainer"></div>
+
+  <script>
+    const wsUrl = 'wss://chazee.onrender.com:10000/5qyz7i';
+    const logContainer = document.getElementById('logContainer');
+    const connectionStatus = document.getElementById('connectionStatus');
+    const commandInput = document.getElementById('commandInput');
+    const sendButton = document.getElementById('sendButton');
+    let ws;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+
+    function connectWebSocket() {
+      ws = new WebSocket(wsUrl);
+      
+      ws.onopen = () => {
+        console.log('Connected to server');
+        connectionStatus.textContent = 'Connected';
+        connectionStatus.style.color = 'green';
+        sendButton.disabled = false;
+        reconnectAttempts = 0;
+        logMessage('Connected to server');
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'deviceList') {
+            data.devices.forEach(device => {
+              logMessage(`Device ${device} connected`);
+            });
+          } else if (data.type === 'data') {
+            logMessage(`Device ${data.deviceID} - ${data.payload}`);
+          }
+        } catch (err) {
+          console.error('Invalid JSON:', err);
+          logMessage(`Error parsing message: ${err.message}`);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        logMessage('WebSocket error occurred');
+      };
+
+      ws.onclose = () => {
+        console.log('Disconnected from server');
+        connectionStatus.textContent = 'Disconnected';
+        connectionStatus.style.color = 'red';
+        sendButton.disabled = true;
+        logMessage('Disconnected from server');
+        if (reconnectAttempts < maxReconnectAttempts) {
+          reconnectAttempts++;
+          setTimeout(connectWebSocket, 5000); // Reconnect after 5 seconds
+        } else {
+          connectionStatus.textContent = 'Max reconnect attempts reached';
+          logMessage('Max reconnect attempts reached');
+        }
+      };
+    }
+
+    function logMessage(message) {
+      const logEntry = document.createElement('div');
+      logEntry.className = 'logEntry';
+      logEntry.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+      logContainer.appendChild(logEntry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    sendButton.addEventListener('click', () => {
+      const command = commandInput.value.trim();
+      if (command && ws && ws.readyState === WebSocket.OPEN) {
+        try {
+          JSON.parse(command); // Validate JSON
+          ws.send(command);
+          logMessage(`Sent command: ${command}`);
+          commandInput.value = '';
+        } catch (err) {
+          logMessage(`Invalid command JSON: ${err.message}`);
+        }
+      } else {
+        logMessage('Cannot send: Invalid command or not connected');
+      }
+    });
+
+    commandInput.addEventListener('keypress', (event) => {
+      if (event.key === 'Enter') {
+        sendButton.click();
+      }
+    });
+
+    // Initial connection
+    connectWebSocket();
+  </script>
+</body>
+</html>
