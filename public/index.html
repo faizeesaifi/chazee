@@ -5,45 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ESP32 Control Panel</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-    }
-    #logContainer {
-      height: 400px;
-      overflow-y: auto;
-      border: 1px solid #ccc;
-      padding: 10px;
-      background-color: #f9f9f9;
-      margin-top: 10px;
-    }
-    .logEntry {
-      margin: 5px 0;
-      padding: 5px;
-      border-bottom: 1px solid #ddd;
-      word-wrap: break-word;
-    }
-    #connectionStatus {
-      margin: 10px 0;
-      font-weight: bold;
-    }
-    #commandInput {
-      width: 70%;
-      padding: 8px;
-      margin-right: 10px;
-      border: 1px solid #ccc;
-    }
-    #sendButton {
-      padding: 8px 15px;
-      background-color: #007bff;
-      color: white;
-      border: none;
-      cursor: pointer;
-    }
-    #sendButton:disabled {
-      background-color: #ccc;
-      cursor: not-allowed;
-    }
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #logContainer { height: 400px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; background-color: #f9f9f9; margin-top: 10px; }
+    .logEntry { margin: 5px 0; padding: 5px; border-bottom: 1px solid #ddd; word-wrap: break-word; }
+    #connectionStatus { margin: 10px 0; font-weight: bold; }
+    #commandInput { width: 70%; padding: 8px; margin-right: 10px; border: 1px solid #ccc; }
+    #sendButton { padding: 8px 15px; background-color: #007bff; color: white; border: none; cursor: pointer; }
+    #sendButton:disabled { background-color: #ccc; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -57,7 +25,7 @@
   <div id="logContainer"></div>
 
   <script>
-    const wsUrl = 'wss://chazee.onrender.com:10000/5qyz7i';
+    const wsUrl = 'wss://chazee.onrender.com:10000/5qyz7i'; // Machine ID: 5qyz7i
     const logContainer = document.getElementById('logContainer');
     const connectionStatus = document.getElementById('connectionStatus');
     const commandInput = document.getElementById('commandInput');
@@ -68,11 +36,11 @@
     const reconnectInterval = 5000;
 
     function connectWebSocket() {
-      console.log('Attempting to connect to:', wsUrl);
+      console.log(`[WebSocket] Connecting to ${wsUrl}`);
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        console.log('WebSocket connected');
+        console.log('[WebSocket] Connected to server');
         connectionStatus.textContent = 'Connected';
         connectionStatus.style.color = 'green';
         sendButton.disabled = false;
@@ -81,39 +49,37 @@
       };
 
       ws.onmessage = (event) => {
-        console.log('Raw message received:', event.data);
+        console.log('[WebSocket] Received:', event.data);
         try {
           const data = JSON.parse(event.data);
-          console.log('Parsed message:', data);
+          console.log('[WebSocket] Parsed:', data);
           if (data.type === 'deviceList') {
-            data.devices.forEach(device => {
-              logMessage(`Device ${device} connected`);
-            });
+            data.devices.forEach(device => logMessage(`Device ${device} connected`));
           } else if (data.type === 'data') {
             logMessage(`Device ${data.deviceID} - ${data.payload}`);
           } else {
             logMessage(`Unknown message type: ${data.type}`);
           }
         } catch (err) {
-          console.error('JSON parse error:', err);
+          console.error('[WebSocket] JSON parse error:', err);
           logMessage(`Error parsing message: ${err.message}`);
         }
       };
 
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error('[WebSocket] Error:', error);
         logMessage('WebSocket error occurred');
       };
 
-      ws.onclose = () => {
-        console.log('WebSocket disconnected');
+      ws.onclose = (event) => {
+        console.log('[WebSocket] Disconnected:', event.code, event.reason);
         connectionStatus.textContent = 'Disconnected';
         connectionStatus.style.color = 'red';
         sendButton.disabled = true;
         logMessage('Disconnected from server');
         if (reconnectAttempts < maxReconnectAttempts) {
           reconnectAttempts++;
-          console.log(`Reconnect attempt ${reconnectAttempts}/${maxReconnectAttempts} in ${reconnectInterval/1000}s`);
+          console.log(`[WebSocket] Reconnect attempt ${reconnectAttempts}/${maxReconnectAttempts} in ${reconnectInterval/1000}s`);
           setTimeout(connectWebSocket, reconnectInterval);
         } else {
           connectionStatus.textContent = 'Max reconnect attempts reached';
@@ -128,7 +94,7 @@
       logEntry.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
       logContainer.appendChild(logEntry);
       logContainer.scrollTop = logContainer.scrollHeight;
-      console.log('UI Log:', message); // Also log to console
+      console.log('[UI] Log:', message);
     }
 
     sendButton.addEventListener('click', () => {
@@ -138,25 +104,22 @@
           const parsedCommand = JSON.parse(command);
           ws.send(JSON.stringify(parsedCommand));
           logMessage(`Sent command: ${command}`);
-          console.log('Sent command:', parsedCommand);
+          console.log('[WebSocket] Sent:', parsedCommand);
           commandInput.value = '';
         } catch (err) {
           logMessage(`Invalid command JSON: ${err.message}`);
-          console.error('Command JSON error:', err);
+          console.error('[WebSocket] Command JSON error:', err);
         }
       } else {
         logMessage('Cannot send: Invalid command or not connected');
-        console.log('Send failed: Invalid command or not connected');
+        console.log('[WebSocket] Send failed: Invalid command or not connected');
       }
     });
 
     commandInput.addEventListener('keypress', (event) => {
-      if (event.key === 'Enter') {
-        sendButton.click();
-      }
+      if (event.key === 'Enter') sendButton.click();
     });
 
-    // Initial connection
     connectWebSocket();
   </script>
 </body>
