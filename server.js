@@ -4,26 +4,38 @@ const app = express();
 
 app.use(express.static('public'));
 
-const server = app.listen(process.env.PORT || 3000);
-const wss = new WebSocket.Server({ server });
+const server = app.listen(process.env.PORT || 3000, () => {
+  console.log(`Server running on port ${server.address().port}`);
+});
+
+const wss = new WebSocket.Server({ server, path: '/5qyz7i' });
 
 wss.on('connection', (ws) => {
   console.log('Client connected');
-  ws.send('Welcome to the WebSocket server!');
-  
+  ws.send(JSON.stringify({ type: 'welcome', message: 'Connected to WebSocket server!' }));
+
   ws.on('message', (message) => {
     console.log('Received:', message.toString());
-    // Broadcast to all connected clients
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(`Message: ${message}`);
-      }
-    });
+    try {
+      const data = JSON.parse(message);
+      wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify(data));
+        }
+      });
+    } catch (err) {
+      console.error('Message parse error:', err);
+      ws.send(JSON.stringify({ type: 'error', message: `Invalid JSON: ${err.message}` }));
+    }
   });
 
   ws.on('close', () => {
     console.log('Client disconnected');
   });
+
+  ws.on('error', (error) => {
+    console.error('WebSocket error:', error);
+  });
 });
 
-console.log('Server running');
+console.log('WebSocket server running');
