@@ -10,14 +10,22 @@
     .logEntry { margin: 5px 0; padding: 5px; border-bottom: 1px solid #ddd; word-wrap: break-word; }
     #connectionStatus { margin: 10px 0; font-weight: bold; }
     #commandInput { width: 70%; padding: 8px; margin-right: 10px; border: 1px solid #ccc; }
-    #sendButton { padding: 8px 15px; background-color: #007bff; color: white; border: none; cursor: pointer; }
+    #sendButton, #disconnectButton, #reconnectButton { padding: 8px 15px; margin: 5px; border: none; cursor: pointer; }
+    #sendButton { background-color: #007bff; color: white; }
     #sendButton:disabled { background-color: #ccc; cursor: not-allowed; }
+    #disconnectButton { background-color: #dc3545; color: white; }
+    #reconnectButton { background-color: #28a745; color: white; }
+    #reconnectButton:disabled { background-color: #ccc; cursor: not-allowed; }
   </style>
 </head>
 <body>
   <h1>ESP32 Control Panel</h1>
   <div id="connectionStatus">Connecting...</div>
   <div>
+    <button id="disconnectButton">Disconnect</button>
+    <button id="reconnectButton" disabled>Reconnect</button>
+  </div>
+  <div style="margin-top: 10px;">
     <input id="commandInput" type="text" placeholder='Enter command (e.g., {"type":"data","deviceID":"ESP32_001","payload":"toggle_led"})'>
     <button id="sendButton" disabled>Send Command</button>
   </div>
@@ -25,11 +33,13 @@
   <div id="logContainer"></div>
 
   <script>
-    const wsUrl = 'wss://chazee.onrender.com/5qyz7i'; // Removed port 10000, using default 443
+    const wsUrl = 'wss://chazee.onrender.com/5qyz7i'; // Using default port 443
     const logContainer = document.getElementById('logContainer');
     const connectionStatus = document.getElementById('connectionStatus');
     const commandInput = document.getElementById('commandInput');
     const sendButton = document.getElementById('sendButton');
+    const disconnectButton = document.getElementById('disconnectButton');
+    const reconnectButton = document.getElementById('reconnectButton');
     let ws;
     let reconnectAttempts = 0;
     const maxReconnectAttempts = 5;
@@ -37,6 +47,7 @@
 
     function connectWebSocket() {
       console.log(`[WebSocket] Connecting to ${wsUrl}`);
+      logMessage(`Connecting to ${wsUrl}`);
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
@@ -44,6 +55,8 @@
         connectionStatus.textContent = 'Connected';
         connectionStatus.style.color = 'green';
         sendButton.disabled = false;
+        disconnectButton.disabled = false;
+        reconnectButton.disabled = true;
         reconnectAttempts = 0;
         logMessage('Connected to server');
       };
@@ -56,7 +69,9 @@
           if (data.type === 'deviceList') {
             data.devices.forEach(device => logMessage(`Device ${device} connected`));
           } else if (data.type === 'data') {
-            logMessage(`Device ${data.deviceID} - ${data.payload}`);
+            logMessage(`Device ${data.deviceID}: ${data.payload}`);
+          } else if (data.type === 'pong') {
+            logMessage('Received pong from server');
           } else {
             logMessage(`Unknown message type: ${data.type}`);
           }
@@ -76,12 +91,14 @@
         connectionStatus.textContent = 'Disconnected';
         connectionStatus.style.color = 'red';
         sendButton.disabled = true;
+        disconnectButton.disabled = true;
+        reconnectButton.disabled = false;
         logMessage(`Disconnected from server (Code: ${event.code}, Reason: ${event.reason || 'None'})`);
-        if (reconnectAttempts < maxReconnectAttempts) {
+        if (reconnectAttempts < maxReconnectAttempts && event.code !== 1000) { // Don't auto-reconnect if manually closed (code 1000)
           reconnectAttempts++;
           console.log(`[WebSocket] Reconnect attempt ${reconnectAttempts}/${maxReconnectAttempts} in ${reconnectInterval/1000}s`);
           setTimeout(connectWebSocket, reconnectInterval);
-        } else {
+        } else if (reconnectAttempts >= maxReconnectAttempts) {
           connectionStatus.textContent = 'Max reconnect attempts reached';
           logMessage('Max reconnect attempts reached');
         }
@@ -118,6 +135,23 @@
 
     commandInput.addEventListener('keypress', (event) => {
       if (event.key === 'Enter') sendButton.click();
+    });
+
+    disconnectButton.addEventListener('click', () => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close(1000, 'Manual disconnect'); // Code 1000 for normal closure
+        logMessage('Manually disconnected from server');
+        disconnectButton.disabled = true;
+        reconnectButton.disabled = false;
+      }
+    });
+
+    reconnectButton.addEventListener('click', () => {
+      if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+        reconnectAttempts = 0; // Reset attempts on manual reconnect
+        connectWebSocket();
+        reconnectButton.disabled = true;
+      }
     });
 
     connectWebSocket();
